@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>final-report.html</h1>
+    <p>Report generated on 28-Jun-2022 at 08:45:49 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-16.0.1</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19043-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"forked": "1.4.0", "html": "3.1.1", "metadata": "2.0.1", "steps": "1.8.0", "xdist": "2.5.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.5</td></tr></table>
+    <h2>Summary</h2>
+    <p>4 tests ran in 325.09 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">4 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCase1.py::TestContactUsEmailInput::test_contact_us_email_input</td>
+          <td class="col-duration">94.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>[WDM] - ====== WebDriver manager ======
+[WDM] - Current google-chrome version is 102.0.5005
+[WDM] - Get LATEST chromedriver version for 102.0.5005 google-chrome
+[WDM] - Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:16 ====== WebDriver manager ======
+INFO     WDM:logger.py:16 Current google-chrome version is 102.0.5005
+INFO     WDM:logger.py:16 Get LATEST chromedriver version for 102.0.5005 google-chrome
+INFO     WDM:logger.py:16 Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache<br/> ------------------------------Captured stdout call------------------------------ <br/>step1 : to open contact form
+waiting for contact_us_modal_initiator to appear
+element contact_us_modal_initiator appeared
+scrolling to element contact_us_modal_initiator 
+clicking on contact_us_modal_initiator
+clicked on contact_us_modal_initiator
+step2 :fill all inputs except email
+waiting for contact_us_form_name_input to appear
+element contact_us_form_name_input appeared
+scrolling to element contact_us_form_name_input 
+inserting Automation Test name into contact_us_form_name_input
+inserted Automation Test name to contact_us_form_name_input
+waiting for contact_us_form_mobile_number_input to appear
+element contact_us_form_mobile_number_input appeared
+scrolling to element contact_us_form_mobile_number_input 
+inserting 05912312345 into contact_us_form_mobile_number_input
+inserted 05912312345 to contact_us_form_mobile_number_input
+waiting for contact_us_form_subject_input to appear
+element contact_us_form_subject_input appeared
+scrolling to element contact_us_form_subject_input 
+inserting Automation Test Subject into contact_us_form_subject_input
+inserted Automation Test Subject to contact_us_form_subject_input
+waiting for contact_us_form_message_input to appear
+element contact_us_form_message_input appeared
+scrolling to element contact_us_form_message_input 
+inserting Automation Test Message into contact_us_form_message_input
+inserted Automation Test Message to contact_us_form_message_input
+step3: open wrong formatted emails file
+step4: test five wrong formatted emails from file and get validation messages
+waiting for contact_us_form_email_input to appear
+element contact_us_form_email_input appeared
+scrolling to element contact_us_form_email_input 
+inserting automation@test into contact_us_form_email_input
+inserted automation@test to contact_us_form_email_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_email_validation_error to appear
+element contact_us_form_email_validation_error appeared
+scrolling to element contact_us_form_email_validation_error 
+getting  text  from contact_us_form_email_validation_error
+returned text :The e-mail address entered is invalid. from contact_us_form_email_validation_error
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for contact_us_form_email_input to appear
+element contact_us_form_email_input appeared
+scrolling to element contact_us_form_email_input 
+inserting automation into contact_us_form_email_input
+inserted automation to contact_us_form_email_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_email_validation_error to appear
+element contact_us_form_email_validation_error appeared
+scrolling to element contact_us_form_email_validation_error 
+getting  text  from contact_us_form_email_validation_error
+returned text :The e-mail address entered is invalid. from contact_us_form_email_validation_error
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for contact_us_form_email_input to appear
+element contact_us_form_email_input appeared
+scrolling to element contact_us_form_email_input 
+inserting automation@@test.com into contact_us_form_email_input
+inserted automation@@test.com to contact_us_form_email_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_email_validation_error to appear
+element contact_us_form_email_validation_error appeared
+scrolling to element contact_us_form_email_validation_error 
+getting  text  from contact_us_form_email_validation_error
+returned text :The e-mail address entered is invalid. from contact_us_form_email_validation_error
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for contact_us_form_email_input to appear
+element contact_us_form_email_input appeared
+scrolling to element contact_us_form_email_input 
+inserting automation.com into contact_us_form_email_input
+inserted automation.com to contact_us_form_email_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_email_validation_error to appear
+element contact_us_form_email_validation_error appeared
+scrolling to element contact_us_form_email_validation_error 
+getting  text  from contact_us_form_email_validation_error
+returned text :The e-mail address entered is invalid. from contact_us_form_email_validation_error
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for contact_us_form_email_input to appear
+element contact_us_form_email_input appeared
+scrolling to element contact_us_form_email_input 
+inserting automation.test@com into contact_us_form_email_input
+inserted automation.test@com to contact_us_form_email_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_email_validation_error to appear
+element contact_us_form_email_validation_error appeared
+scrolling to element contact_us_form_email_validation_error 
+getting  text  from contact_us_form_email_validation_error
+returned text :The e-mail address entered is invalid. from contact_us_form_email_validation_error
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCase2.py::TestCompanySection::test_company_section</td>
+          <td class="col-duration">25.26</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>[WDM] - ====== WebDriver manager ======
+[WDM] - Current google-chrome version is 102.0.5005
+[WDM] - Get LATEST chromedriver version for 102.0.5005 google-chrome
+[WDM] - Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:16 ====== WebDriver manager ======
+INFO     WDM:logger.py:16 Current google-chrome version is 102.0.5005
+INFO     WDM:logger.py:16 Get LATEST chromedriver version for 102.0.5005 google-chrome
+INFO     WDM:logger.py:16 Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache<br/> ------------------------------Captured stdout call------------------------------ <br/>step1: go to company page
+executing script forcompany_link_in_menu_script
+executing script done forcompany_link_in_menu_script
+step2: verify company link
+step3: verify leadership section exists
+waiting for leadership_section_title to appear
+element leadership_section_title appeared
+scrolling to element leadership_section_title 
+getting  text  from leadership_section_title
+returned text :Leadership from leadership_section_title
+step4: click on facebook button
+waiting for facebook_anchor to appear
+element facebook_anchor appeared
+scrolling to element facebook_anchor 
+clicking on facebook_anchor
+clicked on facebook_anchor
+step5: switch the tab
+step6: download facebook image
+waiting for facebook_image to appear
+element facebook_image appeared
+scrolling to element facebook_image 
+step7: verify facebook page link
+step8: verify logo screenshot with the original one
+logo verified with the original one
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCase3.py::TestCareersSection::test_careers_section</td>
+          <td class="col-duration">150.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>[WDM] - ====== WebDriver manager ======
+[WDM] - Current google-chrome version is 102.0.5005
+[WDM] - Get LATEST chromedriver version for 102.0.5005 google-chrome
+[WDM] - Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:16 ====== WebDriver manager ======
+INFO     WDM:logger.py:16 Current google-chrome version is 102.0.5005
+INFO     WDM:logger.py:16 Get LATEST chromedriver version for 102.0.5005 google-chrome
+INFO     WDM:logger.py:16 Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache<br/> ------------------------------Captured stdout call------------------------------ <br/>step1: go to careers page
+executing script forcareers_link_in_menu_script
+executing script done forcareers_link_in_menu_script
+step2: click on hero button
+waiting for check_our_position_hero_button to appear
+element check_our_position_hero_button appeared
+scrolling to element check_our_position_hero_button 
+clicking on check_our_position_hero_button
+clicked on check_our_position_hero_button
+step3: verify careers join us link
+step4: select anywhere location
+waiting for careers_locations_select to appear
+element careers_locations_select appeared
+scrolling to element careers_locations_select 
+selecting Anywhere from careers_locations_select
+selected Anywhere from careers_locations_select
+step5: choose QA job
+executing script forjob_name
+executing script done forjob_name
+step6: verify all 4 sections exists and ordered
+getting multiple elements related to :job_description_sections_titels_general
+verified all 4 sections exists and ordered
+step7: click and verify apply button
+waiting for apply_button to appear
+element apply_button appeared
+scrolling to element apply_button 
+clicking on apply_button
+clicked on apply_button
+step8: submit form with empty values and check validation messages
+waiting for agree_checkbox_apply_form to appear
+element agree_checkbox_apply_form appeared
+scrolling to element agree_checkbox_apply_form 
+clicking on agree_checkbox_apply_form
+clicked on agree_checkbox_apply_form
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for close_message_modal_in_apply_form_button to appear
+element close_message_modal_in_apply_form_button appeared
+scrolling to element close_message_modal_in_apply_form_button 
+clicking on close_message_modal_in_apply_form_button
+clicked on close_message_modal_in_apply_form_button
+step9: verify empty values validation error exists
+waiting for contact_us_form_email_validation_error to appear
+element contact_us_form_email_validation_error appeared
+scrolling to element contact_us_form_email_validation_error 
+getting  text  from contact_us_form_email_validation_error
+returned text :The field is required. from contact_us_form_email_validation_error
+waiting for contact_us_form_name_validation_error to appear
+element contact_us_form_name_validation_error appeared
+scrolling to element contact_us_form_name_validation_error 
+getting  text  from contact_us_form_name_validation_error
+returned text :The field is required. from contact_us_form_name_validation_error
+waiting for contact_us_form_mobile_validation_error to appear
+element contact_us_form_mobile_validation_error appeared
+scrolling to element contact_us_form_mobile_validation_error 
+getting  text  from contact_us_form_mobile_validation_error
+returned text :The field is required. from contact_us_form_mobile_validation_error
+waiting for contact_us_form_message_validation_error to appear
+element contact_us_form_message_validation_error appeared
+scrolling to element contact_us_form_message_validation_error 
+getting  text  from contact_us_form_message_validation_error
+returned text :The field is required. from contact_us_form_message_validation_error
+empty values validation verified
+step10: submit form with invalid email and mobile format
+waiting for contact_us_form_email_input to appear
+element contact_us_form_email_input appeared
+scrolling to element contact_us_form_email_input 
+inserting Automation@test into contact_us_form_email_input
+inserted Automation@test to contact_us_form_email_input
+waiting for contact_us_form_mobile_number_input to appear
+element contact_us_form_mobile_number_input appeared
+scrolling to element contact_us_form_mobile_number_input 
+inserting Automation_mobile into contact_us_form_mobile_number_input
+inserted Automation_mobile to contact_us_form_mobile_number_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for close_message_modal_in_apply_form_button to appear
+element close_message_modal_in_apply_form_button appeared
+scrolling to element close_message_modal_in_apply_form_button 
+clicking on close_message_modal_in_apply_form_button
+clicked on close_message_modal_in_apply_form_button
+waiting for contact_us_form_email_validation_error to appear
+element contact_us_form_email_validation_error appeared
+scrolling to element contact_us_form_email_validation_error 
+getting  text  from contact_us_form_email_validation_error
+returned text :The e-mail address entered is invalid. from contact_us_form_email_validation_error
+waiting for contact_us_form_mobile_validation_error to appear
+element contact_us_form_mobile_validation_error appeared
+scrolling to element contact_us_form_mobile_validation_error 
+getting  text  from contact_us_form_mobile_validation_error
+returned text :The telephone number is invalid. from contact_us_form_mobile_validation_error
+email and mobile validation verified
+step11: upload good_cv
+executing script forcv_upload_input
+executing script done forcv_upload_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for close_message_modal_in_apply_form_button to appear
+element close_message_modal_in_apply_form_button appeared
+scrolling to element close_message_modal_in_apply_form_button 
+clicking on close_message_modal_in_apply_form_button
+clicked on close_message_modal_in_apply_form_button
+good_cv upload verified
+step12: upload bad_cv
+executing script forcv_upload_input
+executing script done forcv_upload_input
+waiting for contact_us_form_submit_button to appear
+element contact_us_form_submit_button appeared
+scrolling to element contact_us_form_submit_button 
+clicking on contact_us_form_submit_button
+clicked on contact_us_form_submit_button
+waiting for contact_us_form_overall_validation_error to appear
+element contact_us_form_overall_validation_error appeared
+scrolling to element contact_us_form_overall_validation_error 
+getting  text  from contact_us_form_overall_validation_error
+returned text :One or more fields have an error. Please check and try again. from contact_us_form_overall_validation_error
+waiting for close_message_modal_in_apply_form_button to appear
+element close_message_modal_in_apply_form_button appeared
+scrolling to element close_message_modal_in_apply_form_button 
+clicking on close_message_modal_in_apply_form_button
+clicked on close_message_modal_in_apply_form_button
+bad_cv upload verified
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCase4.py::TestCareersGetJobsByCity::test_get_jobs_by_city</td>
+          <td class="col-duration">54.54</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>[WDM] - ====== WebDriver manager ======
+[WDM] - Current google-chrome version is 102.0.5005
+[WDM] - Get LATEST chromedriver version for 102.0.5005 google-chrome
+[WDM] - Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:16 ====== WebDriver manager ======
+INFO     WDM:logger.py:16 Current google-chrome version is 102.0.5005
+INFO     WDM:logger.py:16 Get LATEST chromedriver version for 102.0.5005 google-chrome
+INFO     WDM:logger.py:16 Driver [C:\Users\MSI\.wdm\drivers\chromedriver\win32\102.0.5005.61\chromedriver.exe] found in cache<br/> ------------------------------Captured stdout call------------------------------ <br/>step1: go to careers page
+executing script forcareers_link_in_menu_script
+executing script done forcareers_link_in_menu_script
+step2: click on hero button
+waiting for check_our_position_hero_button to appear
+element check_our_position_hero_button appeared
+scrolling to element check_our_position_hero_button 
+clicking on check_our_position_hero_button
+clicked on check_our_position_hero_button
+step3: verify careers join us link
+step4: select Sofia_location location
+waiting for careers_locations_select to appear
+element careers_locations_select appeared
+scrolling to element careers_locations_select 
+selecting Sofia from careers_locations_select
+selected Sofia from careers_locations_select
+step5: print jobs names and links in Sofia_location
+getting multiple elements related to :job_card_name_general
+getting multiple elements related to :job_card_link_general
+Sofia
+Position: Professional Services Specialist
+More info: https://www.musala.com/job/professional-services-specialist/
+#######
+Position: Professional Services Associate
+More info: https://www.musala.com/job/professional-services-associate/
+#######
+Position: Senior Java Developer
+More info: https://www.musala.com/job/senior-java-developer/
+#######
+Position: Automation QA Engineer
+More info: https://www.musala.com/job/experienced-automation-qa-engineer/
+#######
+Position: Python Developer
+More info: https://www.musala.com/job/python-developer/
+#######
+Position: Full-Stack Developer
+More info: https://www.musala.com/job/full-stack-developer-2/
+#######
+Position: JavaScript Developer
+More info: https://www.musala.com/job/javascript-developer/
+#######
+Position: Senior Angular Developer
+More info: https://www.musala.com/job/senior-angular-developer-2/
+#######
+Position: DevOps Engineer
+More info: https://www.musala.com/job/devops-engineer/
+#######
+Position: .NET Developer
+More info: https://www.musala.com/job/net-developer/
+#######
+Position: Software Engineer Virtual Infrastructure Integration
+More info: https://www.musala.com/job/software-engineer-virtual-infrastructure-integration/
+#######
+Position: English Teacher
+More info: https://www.musala.com/job/english-teacher/
+#######
+Position: Event Management Associate
+More info: https://www.musala.com/job/event-management-associate/
+#######
+Position: Accounting Assistant
+More info: https://www.musala.com/job/accounting-assistant/
+#######
+Position: Legal Compliance Assistant
+More info: https://www.musala.com/job/legal-compliance-assistant/
+#######
+Position: QA Engineer (Manual Testing)
+More info: https://www.musala.com/job/qa-engineer-manual-testing/
+#######
+Position: People Development Lead
+More info: https://www.musala.com/job/people-development-lead/
+#######
+Position: Golang Backend Developer
+More info: https://www.musala.com/job/golang-backend-developer/
+#######
+Position: Node.js Developer
+More info: https://www.musala.com/job/node-js-developer/
+#######
+Position: OS and Application Administrator
+More info: https://www.musala.com/job/os-and-application-administrator/
+#######
+Position: React Developer
+More info: https://www.musala.com/job/react-developer/
+#######
+=======================================
+step6: select Skopje_location location
+waiting for careers_locations_select to appear
+element careers_locations_select appeared
+scrolling to element careers_locations_select 
+selecting Skopje from careers_locations_select
+selected Skopje from careers_locations_select
+step7: print jobs names and links in Skopje_location
+getting multiple elements related to :job_card_name_general
+getting multiple elements related to :job_card_link_general
+Skopje
+Position: Senior Java Developer
+More info: https://www.musala.com/job/senior-java-developer/
+#######
+Position: Automation QA Engineer
+More info: https://www.musala.com/job/experienced-automation-qa-engineer/
+#######
+Position: Python Developer
+More info: https://www.musala.com/job/python-developer/
+#######
+Position: Full-Stack Developer
+More info: https://www.musala.com/job/full-stack-developer-2/
+#######
+Position: JavaScript Developer
+More info: https://www.musala.com/job/javascript-developer/
+#######
+Position: Senior Angular Developer
+More info: https://www.musala.com/job/senior-angular-developer-2/
+#######
+Position: DevOps Engineer
+More info: https://www.musala.com/job/devops-engineer/
+#######
+Position: .NET Developer
+More info: https://www.musala.com/job/net-developer/
+#######
+Position: Software Engineer Virtual Infrastructure Integration
+More info: https://www.musala.com/job/software-engineer-virtual-infrastructure-integration/
+#######
+Position: QA Engineer (Manual Testing)
+More info: https://www.musala.com/job/qa-engineer-manual-testing/
+#######
+Position: Golang Backend Developer
+More info: https://www.musala.com/job/golang-backend-developer/
+#######
+Position: Node.js Developer
+More info: https://www.musala.com/job/node-js-developer/
+#######
+Position: OS and Application Administrator
+More info: https://www.musala.com/job/os-and-application-administrator/
+#######
+Position: React Developer
+More info: https://www.musala.com/job/react-developer/
+#######
+=======================================
+<br/></div></td></tr></tbody></table></body></html>

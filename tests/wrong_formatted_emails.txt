@@ -1,0 +1,5 @@
+automation@test
+automation
+automation@@test.com
+automation.com
+automation.test@com
